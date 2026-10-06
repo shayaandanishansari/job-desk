@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "jobdesk": {
+      "command": "python",
+      "args": ["-m", "jobdesk", "mcp"],
+      "env": {
+        "PYTHONIOENCODING": "utf-8"
+      }
+    }
+  }
+}

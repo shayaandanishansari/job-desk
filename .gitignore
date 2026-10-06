@@ -1,0 +1,21 @@
+# Your data stays out of git: the database, attached files, backups and settings.json.
+data/
+web/node_modules/
+web/dist/
+__pycache__/
+.pytest_cache/
+*.egg-info/
+
+# PyInstaller output (packaging/build.ps1)
+build/
+dist/
+.venv-build/
+
+# Personal files kept next to the code but never published
+AGENTS.local.md
+CLAUDE.local.md
+archive/
+scraper/
+scripts/import_legacy.py
+docs/email-guide.md
+.idea/

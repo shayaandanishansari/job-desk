@@ -1,0 +1,44 @@
+name: Release
+
+# Push a tag like v1.0.0 to build JobDesk-<version>-windows.zip and publish it as a release.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: pip install -e ".[dev,build]"
+      - run: python -m pytest tests
+      - name: Check the tag matches the version
+        shell: pwsh
+        run: |
+          $version = python -c "import jobdesk; print(jobdesk.__version__)"
+          if ("v$version" -ne $env:GITHUB_REF_NAME) { throw "Tag $env:GITHUB_REF_NAME doesn't match jobdesk.__version__ $version" }
+      - run: ./packaging/build.ps1
+        shell: pwsh
+      - name: Smoke test the exe
+        shell: pwsh
+        run: |
+          ./dist/JobDesk/JobDesk.exe version
+          if ($LASTEXITCODE) { throw 'JobDesk.exe failed to start' }
+      - name: Publish the release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create $env:GITHUB_REF_NAME (Get-Item dist/JobDesk-*-windows.zip).FullName `
+            --title "Job Desk $env:GITHUB_REF_NAME" --notes-file packaging/release-notes.md

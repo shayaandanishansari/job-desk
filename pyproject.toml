@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jobdesk"
+dynamic = ["version"]
+description = "A local job-search tracker: one record per job, a dashboard, and an MCP server so Claude can work on it too."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
+    "pydantic>=2.7",
+    "mcp>=1.10,<2",  # 2.x renamed FastMCP; mcp_server.py is written for 1.x
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "watchfiles>=1.0"]
+build = ["pyinstaller>=6.10"]
+
+[project.urls]
+Repository = "https://github.com/shayaandanishansari/job-desk"
+
+[tool.setuptools]
+packages = ["jobdesk"]
+
+[tool.setuptools.dynamic]
+version = { attr = "jobdesk.__version__" }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
