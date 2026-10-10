@@ -1,5 +1,7 @@
 # Job Desk
 
+[![M8ven Score](https://m8ven.ai/badge/mcp/shayaandanishansari-job-desk-15unee?v=926db739633eb539bdc4abe10265f232)](https://m8ven.ai/mcp/shayaandanishansari-job-desk-15unee?s=readme)
+
 A job-search tracker that runs on your own computer. Every job you're looking at or have applied to is one record: the posting, where the application stands, the emails, and what to do next. There's a dashboard for you and an MCP server for Claude, and both work on the same database, so whatever Claude changes shows up on the dashboard within a second.
 
 I built it for my own job search, after a folder of Markdown files and a status table stopped keeping up.
