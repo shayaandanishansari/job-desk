@@ -7,26 +7,35 @@ import {
 } from 'react'
 import { patch, post, reducedMotion } from './api'
 import { actorName, dueTone, fmtDate, fmtDateTime, label } from './format'
-import type { EventRow, FileRow, JobSummary, Outcome, Side, Stage, Status } from './types'
+import type {
+  EventRow, FileRow, Kind, Outcome, ProjectOutcome, ProjectStage, ProjectStatus, Pursuit, Side, Stage, Status,
+} from './types'
 
 export const STAGES: Stage[] = ['drafting', 'applied', 'screening', 'interviewing', 'offer']
+export const PROJECT_STAGES: ProjectStage[] = ['drafting', 'pitched', 'talking', 'proposal', 'negotiating']
 
-export function stageColor(stage: Stage | null | undefined) {
+/** The five stops of a job's or a project's route line. */
+export function stagesOf(kind: Kind | undefined): string[] {
+  return kind === 'project' ? PROJECT_STAGES : STAGES
+}
+
+export function stageColor(stage: string | null | undefined) {
   return stage ? `var(--st-${stage})` : 'var(--rule-strong)'
 }
 
-export function endColor(outcome: Outcome | null | undefined, side: Side | null | undefined) {
+export function endColor(outcome: Outcome | ProjectOutcome | null | undefined, side: Side | null | undefined) {
   if (!outcome) return null
-  if (outcome === 'accepted') return 'var(--st-offer)'
+  if (outcome === 'accepted' || outcome === 'won') return 'var(--st-offer)'
   if (outcome === 'no_response') return 'var(--ink-3)'
   return side === 'them' ? 'var(--end-them)' : 'var(--end-me)'
 }
 
-/** The route line: five stops, filled up to the current one. A closed application ends in a
- *  terminus bar at the stage it reached, coloured by who ended it. */
-export function Track({ stage, outcome, side, big }: {
-  stage: Stage; outcome?: Outcome | null; side?: Side | null; big?: boolean
+/** The route line: five stops, filled up to the current one. A closed application (or project)
+ *  ends in a terminus bar at the stage it reached, coloured by who ended it. */
+export function Track({ stage, outcome, side, big, kind }: {
+  stage: Stage | ProjectStage; outcome?: Outcome | ProjectOutcome | null; side?: Side | null; big?: boolean; kind?: Kind
 }) {
+  const STAGES = stagesOf(kind)
   const cur = STAGES.indexOf(stage)
   const line = endColor(outcome, side) ?? stageColor(stage)
   return (
@@ -54,22 +63,25 @@ export function Track({ stage, outcome, side, big }: {
 
 export const BEFORE: Status[] = ['new', 'shortlisted', 'passed']
 export const OUTCOMES: Outcome[] = ['accepted', 'rejected', 'role_filled', 'no_response', 'withdrew', 'declined']
+export const PROJECT_BEFORE: ProjectStatus[] = ['lead', 'qualified', 'passed']
+export const PROJECT_OUTCOMES: ProjectOutcome[] = ['won', 'lost', 'no_response', 'cancelled', 'turned_down']
 
-export function isInProgress(status: Status): status is Stage {
-  return (STAGES as string[]).includes(status)
+export function isInProgress(status: Status | ProjectStatus, kind: Kind = 'job'): boolean {
+  return stagesOf(kind).includes(status)
 }
 
-/** The colour a job's status is drawn in: its stage line while in progress, its ending once closed. */
-export function statusColor(j: { status: Status; outcome_side: Side | null }) {
-  if (isInProgress(j.status)) return stageColor(j.status)
-  if (j.status === 'new') return 'var(--accent)'
-  if (j.status === 'shortlisted') return 'var(--ink-2)'
+/** The colour a status is drawn in: its stage line while in progress, its ending once closed. */
+export function statusColor(j: { status: Status | ProjectStatus; outcome_side: Side | null; kind?: Kind }) {
+  if (isInProgress(j.status, j.kind)) return stageColor(j.status)
+  if (j.status === 'new' || j.status === 'lead') return 'var(--accent)'
+  if (j.status === 'shortlisted' || j.status === 'qualified') return 'var(--ink-2)'
   if (j.status === 'passed') return 'var(--ink-3)'
   return endColor(j.status as Outcome, j.outcome_side) ?? 'var(--ink-3)'
 }
 
-/** The row tag: a tiny route line (once the job has been pursued) and the status name. */
-export function StatusChip({ job }: { job: { status: Status; stage_reached: Stage | null; outcome_side: Side | null; pass_reason?: string | null } }) {
+/** The row tag: a tiny route line (once the job or project has been pursued) and the status name. */
+export function StatusChip({ job }: { job: { kind?: Kind; status: Status | ProjectStatus; stage_reached: string | null; outcome_side: Side | null; pass_reason?: string | null } }) {
+  const STAGES = stagesOf(job.kind)
   const color = statusColor(job)
   const reached = job.stage_reached ? STAGES.indexOf(job.stage_reached) : -1
   const name = job.status === 'passed' && job.pass_reason ? `Passed: ${label(job.pass_reason)}` : label(job.status)
@@ -124,9 +136,9 @@ export function ApplyLink({ to }: { to: string | null }) {
   return <div className="row-apply"><span>{to}</span></div>
 }
 
-export function Signals({ job }: { job: JobSummary }) {
+export function Signals({ job }: { job: Pursuit }) {
   const out: ReactNode[] = []
-  if (isInProgress(job.status) && job.next_action_due) {
+  if (isInProgress(job.status, job.kind) && job.next_action_due) {
     const tone = dueTone(job.next_action_due)
     if (tone === 'late' || tone === 'now') {
       out.push(<span key="due" className={`pill ${tone}`} title={job.next_action ?? ''}>
@@ -135,7 +147,7 @@ export function Signals({ job }: { job: JobSummary }) {
     }
   }
   if (job.flags.some((f) => f.flag === 'reply_waiting')) out.push(<span key="reply" className="pill ok">Reply waiting</span>)
-  if (job.next_interview) out.push(<span key="iv" className="pill blue">Interview {fmtDate(job.next_interview)}</span>)
+  if (job.kind === 'job' && job.next_interview) out.push(<span key="iv" className="pill blue">Interview {fmtDate(job.next_interview)}</span>)
   if (job.follow_ups_sent > 0) {
     out.push(<span key="fu" className="pill">{job.follow_ups_sent === 1 ? '1 follow-up' : `${job.follow_ups_sent} follow-ups`}</span>)
   }
@@ -157,8 +169,8 @@ export function Markdown({ text, className }: { text: string | null | undefined;
   return <div className={`md ${className ?? ''}`} dangerouslySetInnerHTML={{ __html: html }} />
 }
 
-/** Your own marker for jobs you care about. Fills in at once; rolls back if the save fails. */
-export function Star({ job, size = 17 }: { job: { id: number; starred: number }; size?: number }) {
+/** Your own marker for jobs (and projects) you care about. Fills in at once; rolls back if the save fails. */
+export function Star({ job, size = 17 }: { job: { id: number; starred: number; kind?: Kind }; size?: number }) {
   const [on, setOn] = useState(!!job.starred)
   const [pops, setPops] = useState(0)
   useEffect(() => { setOn(!!job.starred) }, [job.starred])
@@ -167,11 +179,12 @@ export function Star({ job, size = 17 }: { job: { id: number; starred: number };
     const next = !on
     setOn(next)
     if (next) setPops((n) => n + 1)
-    act(() => patch(`/api/jobs/${job.id}`, { starred: next })).then((r) => { if (r === undefined) setOn(!next) })
+    act(() => patch(`/api/${job.kind === 'project' ? 'projects' : 'jobs'}/${job.id}`, { starred: next }))
+      .then((r) => { if (r === undefined) setOn(!next) })
   }
   return (
     <button type="button" className={`star${on ? ' on' : ''}`} onClick={toggle} aria-pressed={on}
-            aria-label={on ? 'Starred. Click to remove the star' : 'Star this job'} title={on ? 'Remove star' : 'Star'}>
+            aria-label={on ? 'Starred. Click to remove the star' : `Star this ${job.kind ?? 'job'}`} title={on ? 'Remove star' : 'Star'}>
       <StarIcon key={pops} className={pops && on ? 'pop' : undefined} size={size} strokeWidth={2} />
       {pops > 0 && on && <span key={`b${pops}`} className="burst" aria-hidden="true" />}
     </button>
@@ -233,7 +246,7 @@ export function Thumbs({ files }: { files: FileRow[] }) {
   )
 }
 
-export function Timeline({ events, entityType, entityId }: { events: EventRow[]; entityType: 'job' | 'company'; entityId: number }) {
+export function Timeline({ events, entityType, entityId }: { events: EventRow[]; entityType: 'job' | 'project' | 'company'; entityId: number }) {
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
   const add = async () => {

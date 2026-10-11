@@ -144,8 +144,8 @@ export function useApi<T>(path: string | null, { keep = false } = {}) {
 // ------------------------------------------------------------------ routing
 // #/<view>?a=1&b=2 — shareable, survives reloads, and the back button works.
 
-export type View = 'today' | 'jobs' | 'stats' | 'people'
-const VIEWS: View[] = ['today', 'jobs', 'stats', 'people']
+export type View = 'today' | 'jobs' | 'projects' | 'stats' | 'people'
+const VIEWS: View[] = ['today', 'jobs', 'projects', 'stats', 'people']
 
 export interface Route { view: View; params: URLSearchParams }
 

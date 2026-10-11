@@ -60,11 +60,16 @@ def meta():
         "vocab": {name: list(getattr(vocab, name)) for name in (
             "WORK_MODES", "EMPLOYMENT_TYPES", "SENIORITIES", "TRI_STATE", "APPLY_METHODS", "SOURCES",
             "STATUSES", "BEFORE", "STAGES", "OUTCOMES", "PASS_REASONS", "CHANNELS", "INTERVIEW_KINDS",
-            "DRAFT_STATUSES", "DRAFT_KINDS")},
+            "DRAFT_STATUSES", "DRAFT_KINDS", "PROJECT_STATUSES", "PROJECT_BEFORE", "PROJECT_STAGES",
+            "PROJECT_OUTCOMES", "PROJECT_PASS_REASONS", "PROJECT_SOURCES", "PROJECT_CHANNELS", "PRICING",
+            "CONTACT_ROLES")},
         "labels": vocab.LABELS,
         "outcome_side": vocab.OUTCOME_SIDE,
         "rules": {"follow_up_after_business_days": rules.FOLLOW_UP_AFTER, "max_follow_ups": rules.MAX_FOLLOW_UPS,
-                  "no_response_after_days": rules.NO_RESPONSE_AFTER},
+                  "no_response_after_days": rules.NO_RESPONSE_AFTER,
+                  "pitch_follow_ups_business_days": list(rules.PITCH_FOLLOW_UPS),
+                  "pitch_no_response_after_days": rules.PITCH_NO_RESPONSE_AFTER,
+                  "upwork_no_response_after_days": rules.UPWORK_NO_RESPONSE_AFTER},
         "resumes": run("resume_versions"),
         "today": date.today().isoformat(),
     }
@@ -78,6 +83,11 @@ def today():
 @app.get("/api/stats")
 def stats():
     return run("stats")
+
+
+@app.get("/api/stats/projects")
+def project_stats():
+    return run("project_stats")
 
 
 # ------------------------------------------------------------------ jobs
@@ -130,6 +140,40 @@ def patch_draft(draft_id: int, body: dict[str, Any]):
 @app.post("/api/notes")
 def note(body: dict[str, Any]):
     return run("add_note", body["entity_type"], int(body["entity_id"]), body["text"])
+
+
+# ------------------------------------------------------------------ projects (client work)
+
+@app.get("/api/projects")
+def projects(request: Request, q: str | None = None, sort: str = "priority"):
+    filters = {}
+    for key in Desk.PROJECT_FACETS:
+        values = request.query_params.getlist(key)
+        if values:
+            filters[key] = values
+    return run("search_projects", q=q, filters=filters, sort=sort, with_facets=True)
+
+
+@app.get("/api/projects/{project_id}")
+def project(project_id: int):
+    return run("get_project", project_id)
+
+
+@app.patch("/api/projects/{project_id}")
+def patch_project(project_id: int, body: dict[str, Any]):
+    return run("update_project", project_id, **body)
+
+
+@app.post("/api/projects/{project_id}/status")
+def project_status(project_id: int, body: dict[str, Any]):
+    return run("set_project_status", project_id, body["status"], on=body.get("on"), note=body.get("note"),
+               pass_reason=body.get("pass_reason"), value=body.get("value"), outcome_notes=body.get("outcome_notes"))
+
+
+@app.post("/api/projects/{project_id}/follow-up")
+def project_follow_up(project_id: int, body: dict[str, Any] | None = None):
+    body = body or {}
+    return run("log_project_follow_up", project_id, on=body.get("on"), note=body.get("note"))
 
 
 # ------------------------------------------------------------------ people and mail

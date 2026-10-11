@@ -2,7 +2,7 @@
 
 [![M8ven Score](https://m8ven.ai/badge/mcp/shayaandanishansari-job-desk-15unee?v=926db739633eb539bdc4abe10265f232)](https://m8ven.ai/mcp/shayaandanishansari-job-desk-15unee?s=readme)
 
-A job-search tracker that runs on your own computer. Every job you're looking at or have applied to is one record: the posting, where the application stands, the emails, and what to do next. There's a dashboard for you and an MCP server for Claude, and both work on the same database, so whatever Claude changes shows up on the dashboard within a second.
+A job-search tracker that runs on your own computer. Every job you're looking at or have applied to is one record: the posting, where the application stands, the emails, and what to do next. Freelance work gets the same treatment: every client project you're pitching for is one record too, from lead to won. There's a dashboard for you and an MCP server for Claude, and both work on the same database, so whatever Claude changes shows up on the dashboard within a second.
 
 I built it for my own job search, after a folder of Markdown files and a status table stopped keeping up.
 
@@ -20,13 +20,16 @@ On macOS or Linux, [run it from source](#run-from-source).
 
 ## The dashboard
 
-- **Today:** what's due, replies waiting, drafts ready to send, interviews coming up, saved jobs closing soon and new jobs to look at.
+- **Today:** what's due across jobs and projects, replies waiting, drafts ready to send, interviews coming up, saved jobs closing soon, new jobs to look at and leads to pitch.
 - **Jobs:** every job, with search and filters (status, country, city, work mode, visa, priority, source and more). The buttons above the list switch between All, Not applied, In progress and Closed. Each card's tag shows where the job stands: applied, rejected after a screening call, two follow-ups sent, and so on. Click a job to see the posting, its emails, interviews and history.
 - **Stars:** click the star on any card to mark the jobs you care about. Starred jobs sort to the top.
-- **Stats:** the funnel from applied to offer, broken down by source, country and resume version, plus applications per week.
-- **People:** companies and contacts.
+- **Projects:** client work on a board, one lane per stage, from leads to won. Each card shows the price, the next step and when it's due. Click one to see the brief, the pitch, its emails and history.
+- **Stats:** the funnel from applied to offer, broken down by source, country and resume version, plus applications per week. Switch to **Client work** for pitches, replies, proposals and wins, the open pipeline and what you've won.
+- **People:** companies and contacts, shared by jobs and projects. A contact can have a role (recruiter, founder, client...).
 
 A job moves `new → shortlisted → drafting → applied → screening → interviewing → offer`, and closes as rejected, role filled, no response (their side) or accepted, withdrew, declined (yours). Follow-ups are suggested 7 business days after applying and again 7 later, never more than two. After 30 days of silence it suggests closing the job as no response. It never moves a status on its own.
+
+A project moves `lead → qualified → drafting → pitched → talking → proposal → negotiating`, and closes as won, turned down (yours) or lost, no response, cancelled (theirs). Pitches get follow-ups 3 and then 5 business days apart. Upwork proposals get none, since only the client can write first; after 14 days of silence it suggests closing them.
 
 ## Working with Claude
 
@@ -55,6 +58,7 @@ Things to ask:
 - "Add this job", with a screenshot, pasted text or a link. Claude stores the posting word for word, attaches the screenshot and writes notes on fit.
 - "Draft an application for #50." With a Gmail connector, Claude can save it to your Gmail drafts too.
 - "Sync my Gmail." Claude reads your sent applications and replies and updates each job.
+- "Add this Upwork job as a project", or "Add a lead: the dental clinic on Main Street." Claude stores the brief, the budget and who to talk to.
 - "What's due?", "Which UAE jobs sponsor visas?", "Star the Acme one."
 
 ## Settings

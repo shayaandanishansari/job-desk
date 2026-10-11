@@ -25,13 +25,34 @@ PASS_REASONS = ("nationality_restricted", "too_senior", "skills_mismatch", "no_v
 OUTCOME_SIDE = {                   # who ended it, the Greenhouse split
     "accepted": "me", "withdrew": "me", "declined": "me",
     "rejected": "them", "role_filled": "them", "no_response": "them",
+    # projects
+    "won": "me", "turned_down": "me", "lost": "them", "cancelled": "them",
 }
 CHANNELS = ("email", "form", "referral", "in_person", "other")
 
+# Client work: one record per opportunity, the same idea as one record per job.
+#   before pitching:  lead -> qualified (or passed)
+#   in progress:      drafting -> pitched -> talking -> proposal -> negotiating
+#   closed:           won, or one of the other outcomes below
+# An Upwork proposal is a pitch. A later piece of work for the same client is a new project
+# that points back at the first through follow_on_of.
+PROJECT_BEFORE = ("lead", "qualified", "passed")
+PROJECT_STAGES = ("drafting", "pitched", "talking", "proposal", "negotiating")
+PROJECT_OUTCOMES = ("won", "lost", "no_response", "cancelled", "turned_down")
+PROJECT_STATUSES = ("lead", "qualified") + PROJECT_STAGES + PROJECT_OUTCOMES + ("passed",)
+PROJECT_PASS_REASONS = ("budget_too_low", "skills_mismatch", "red_flags", "not_interested", "posting_closed",
+                        "duplicate", "other")
+PROJECT_SOURCES = ("upwork", "outreach", "inbound", "referral", "linkedin", "other")
+PROJECT_CHANNELS = ("email", "upwork", "linkedin", "whatsapp", "call", "in_person", "other")
+PRICING = ("fixed", "hourly", "retainer", "unknown")
+
+# Who a contact is to you. Jobs and projects share the same people.
+CONTACT_ROLES = ("recruiter", "hiring_manager", "founder", "decision_maker", "client", "referrer", "other")
+
 INTERVIEW_KINDS = ("screen", "technical", "take_home", "onsite", "final", "other")
-DRAFT_KINDS = ("application", "follow_up", "thank_you", "other")
+DRAFT_KINDS = ("application", "pitch", "follow_up", "thank_you", "other")
 DRAFT_STATUSES = ("draft", "in_gmail", "sent", "discarded")
-FILE_ENTITIES = ("job", "company")
+FILE_ENTITIES = ("job", "company", "project")
 FILE_KINDS = ("screenshot", "posting", "sent_email", "document", "other")
 ACTORS = ("me", "claude", "system", "import")
 
@@ -55,6 +76,16 @@ LABELS = {
     "accepted": "Accepted", "rejected": "Rejected", "role_filled": "Role filled",
     "no_response": "No response", "withdrew": "Withdrew", "declined": "Declined offer",
     "form": "Form", "in_person": "In person",
+    # projects
+    "lead": "Lead", "qualified": "Qualified", "pitched": "Pitched", "talking": "In talks",
+    "proposal": "Proposal sent", "negotiating": "Negotiating",
+    "won": "Won", "lost": "Lost", "cancelled": "Cancelled", "turned_down": "Turned down",
+    "budget_too_low": "Budget too low", "red_flags": "Red flags",
+    "upwork": "Upwork", "outreach": "Your outreach", "inbound": "They came to you",
+    "whatsapp": "WhatsApp", "call": "Call",
+    "fixed": "Fixed price", "hourly": "Hourly", "retainer": "Retainer",
+    "recruiter": "Recruiter", "hiring_manager": "Hiring manager", "founder": "Founder",
+    "decision_maker": "Decision maker", "client": "Client", "referrer": "Referrer",
 }
 
 

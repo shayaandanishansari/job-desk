@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Job Desk: every job one person is considering or has applied to, one record per job, in one database, with a dashboard they read and an MCP server Claude works through. Their own details (name, email addresses, resumes, email guide) are in `settings.json` next to the database.
+Job Desk: every job one person is considering or has applied to, one record per job, and the client work (freelance projects) they're pitching for, one record per project. One database, with a dashboard they read and an MCP server Claude works through. Their own details (name, email addresses, resumes, email guide) are in `settings.json` next to the database.
 
 **If `AGENTS.local.md` exists, read it too.** It holds the owner's own rules and isn't in git.
 
@@ -13,7 +13,7 @@ Job Desk: every job one person is considering or has applied to, one record per 
 | `data/files/` | Screenshots and files attached to jobs. Not in git. |
 | `data/backups/` | Copies of the database: `python -m jobdesk backup <label>`, and automatic ones before migrations. |
 | `jobdesk/` | Python package. `core.py` is the only code that writes to the database. `rules.py` holds the follow-up rules. `vocab.py` every fixed list of values, including the statuses. `server.py` is the dashboard API, `mcp_server.py` the MCP server, `launcher.py` what JobDesk.exe does when it's double-clicked. |
-| `web/` | The dashboard: React + Vite + TypeScript, light mode. Today, Jobs (with filters, a Starred toggle and All / Not applied / In progress / Closed views), Stats, People. |
+| `web/` | The dashboard: React + Vite + TypeScript, light mode. Today (jobs and projects in one list), Jobs (with filters, a Starred toggle and All / Not applied / In progress / Closed views), Projects (a board with one lane per stage; the project opens in a drawer), Stats (Job search / Client work), People. |
 | `packaging/` | JobDesk.exe: the PyInstaller spec, its entry point, the icon and `build.ps1`. |
 | `.github/workflows/` | Tests on every push; a tag `v*` builds the Windows zip and publishes a release. |
 | `tests/` | `python -m pytest tests` |
@@ -43,6 +43,8 @@ Use the MCP server (`jobdesk` in `.mcp.json`). Its tools validate every write an
 - **Follow-ups** (`rules.py`): 7 business days after applying, a second 7 business days later, never more than two. After 30 days with no reply the dashboard suggests closing as no response; it never closes anything itself. Forms with no contact get no follow-ups, only the 30-day check. These are suggestions; set `next_action` and `next_action_due` when a company gives its own timeline.
 - **Gmail sync** (only when asked, read-only, through a Gmail connector): find sent applications and replies, then `record_email_thread` per job. Store plain text without quoted history. Set `automated=true` on confirmations and notifications (LinkedIn, ATS "we received your application"), so they don't count as replies. Redact credentials, such as API keys in submission emails. Gmail dates are UTC; core converts them to this PC's time zone. A message from an address in settings counts as sent by the owner. A Gmail thread that covers several jobs (LinkedIn groups some) is saved once per job, as `<threadId>#<messageId>`.
 - **Email drafts:** if settings name an email guide, follow it. Save each draft with `save_email_draft`, create the Gmail draft, then mark it `in_gmail`. The owner attaches the resume and sends.
+- **Client work (projects)** works like jobs, with its own tools (`search_projects`, `add_project`, `set_project_status`, `log_project_follow_up`, `project_stats`...). One record per opportunity: `lead → qualified` (or `passed`) before pitching; `drafting → pitched → talking → proposal → negotiating` in progress; closed as `won` (with the agreed `value`), `turned_down` (the owner's side) or `lost`, `no_response`, `cancelled` (theirs). An Upwork proposal is a pitch: `source='upwork'`, `source_ref` the job id, and it gets no follow-ups (Upwork only lets the client write first), only a 14-day silence check. Other pitches get follow-ups 3 and then 5 business days apart, and a no-response suggestion after 21 days (`rules.py`). `budget_text` is their budget as stated; `pricing` + `value` + `currency` is the owner's price. More work from the same client is a new project with `follow_on_of` set. The record stops at won for now; delivery and payments aren't tracked.
+- **Shared between jobs and projects:** companies, contacts (with a `role`: recruiter, hiring_manager, founder, decision_maker, client, referrer, other), email threads and drafts (each on a job or a project, never both: pass `job_id` or `project_id`), files (`entity_type` `project`), notes and the events timeline (`events.project_id`). A project's draft defaults to kind `pitch` with no resume attached.
 
 ## Rules
 
@@ -52,7 +54,7 @@ Use the MCP server (`jobdesk` in `.mcp.json`). Its tools validate every write an
 
 ## Schema changes
 
-Bump `SCHEMA_VERSION` in `jobdesk/db.py`, add the new columns to `SCHEMA` for fresh databases, and add an `if version == n:` step in `ensure_schema`, which backs up first (v3 merged the old applications table into jobs, see `MIGRATE_2_TO_3`; v4 added `jobs.starred`). Tests and other throwaway databases keep their files and backups next to themselves, never in `data/`. Add new fixed values to `vocab.py`. The schema's CHECK constraints, the input models and the dashboard's filters all read from it. Run `python -m pytest tests` and `npx tsc --noEmit` in `web/`.
+Bump `SCHEMA_VERSION` in `jobdesk/db.py`, add the new columns to `SCHEMA` for fresh databases, and add an `if version == n:` step in `ensure_schema`, which backs up first (v3 merged the old applications table into jobs, see `MIGRATE_2_TO_3`; v4 added `jobs.starred`; v5 added projects, see `_migrate_4_to_5`). Tests and other throwaway databases keep their files and backups next to themselves, never in `data/`. Add new fixed values to `vocab.py`. The schema's CHECK constraints, the input models and the dashboard's filters all read from it. Run `python -m pytest tests` and `npx tsc --noEmit` in `web/`.
 
 ## Releasing
 

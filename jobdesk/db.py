@@ -8,12 +8,13 @@ from pathlib import Path
 
 from . import paths
 from .vocab import (
-    ACTORS, APPLY_METHODS, CHANNELS, DRAFT_KINDS, DRAFT_STATUSES, EMPLOYMENT_TYPES,
-    FILE_ENTITIES, FILE_KINDS, INTERVIEW_KINDS, PASS_REASONS, POSTING_STATUSES,
+    ACTORS, APPLY_METHODS, CHANNELS, CONTACT_ROLES, DRAFT_KINDS, DRAFT_STATUSES, EMPLOYMENT_TYPES,
+    FILE_ENTITIES, FILE_KINDS, INTERVIEW_KINDS, PASS_REASONS, POSTING_STATUSES, PRICING, PROJECT_CHANNELS,
+    PROJECT_PASS_REASONS, PROJECT_SOURCES, PROJECT_STAGES, PROJECT_STATUSES,
     SALARY_PERIODS, SENIORITIES, SOURCES, STAGES, STATUSES, TRI_STATE, WORK_MODES, check,
 )
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 STAMPS = "created_at TEXT NOT NULL, updated_at TEXT NOT NULL"
 
@@ -104,6 +105,7 @@ CREATE TABLE {name} (
     id INTEGER PRIMARY KEY,
     gmail_thread_id TEXT UNIQUE,
     job_id INTEGER REFERENCES jobs(id) ON DELETE SET NULL,
+    project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL,   -- a thread belongs to a job or a project
     subject TEXT,
     participants TEXT,
     first_at TEXT,
@@ -119,7 +121,8 @@ def drafts_table(name="email_drafts"):
     return f"""
 CREATE TABLE {name} (
     id INTEGER PRIMARY KEY,
-    job_id INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+    job_id INTEGER REFERENCES jobs(id) ON DELETE CASCADE,
+    project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE,
     kind TEXT NOT NULL DEFAULT 'application' {check('kind', DRAFT_KINDS)},
     to_addr TEXT,
     cc_addr TEXT,
@@ -128,7 +131,8 @@ CREATE TABLE {name} (
     status TEXT NOT NULL DEFAULT 'draft' {check('status', DRAFT_STATUSES)},
     gmail_draft_id TEXT,
     attach_resume INTEGER NOT NULL DEFAULT 1,
-    {STAMPS}
+    {STAMPS},
+    CHECK ((job_id IS NULL) != (project_id IS NULL))        -- on a job or on a project, never both
 );"""
 
 
@@ -145,6 +149,48 @@ CREATE TABLE {name} (
 );"""
 
 
+def projects_table(name="projects"):
+    """Client work (v5): one record per opportunity, shaped like a job."""
+    return f"""
+CREATE TABLE {name} (
+    id INTEGER PRIMARY KEY,
+    title TEXT NOT NULL,
+    company_id INTEGER REFERENCES companies(id) ON DELETE SET NULL,
+    contact_id INTEGER REFERENCES contacts(id) ON DELETE SET NULL,
+    description TEXT,                    -- what they need: the brief or the posting, as Markdown
+    source TEXT NOT NULL DEFAULT 'other' {check('source', PROJECT_SOURCES)},
+    source_url TEXT,
+    source_ref TEXT,                     -- the listing's id where it came from, e.g. an Upwork job id
+    pricing TEXT NOT NULL DEFAULT 'unknown' {check('pricing', PRICING)},
+    budget_text TEXT,                    -- their budget as they put it, e.g. '$15-40/hr'
+    value REAL,                          -- your price: the fixed fee, hourly rate or monthly retainer
+    currency TEXT,
+    found_on TEXT NOT NULL,
+    priority INTEGER CHECK (priority BETWEEN 1 AND 4 OR priority IS NULL),
+    starred INTEGER NOT NULL DEFAULT 0,
+    fit_notes TEXT,
+    tags TEXT NOT NULL DEFAULT '[]',
+    follow_on_of INTEGER REFERENCES {name}(id) ON DELETE SET NULL,   -- more work from an earlier project
+
+    -- where the pursuit stands (see vocab.PROJECT_STATUSES)
+    status TEXT NOT NULL DEFAULT 'lead' {check('status', PROJECT_STATUSES)},
+    stage_reached TEXT {check('stage_reached', PROJECT_STAGES, nullable=True)},
+    pass_reason TEXT {check('pass_reason', PROJECT_PASS_REASONS, nullable=True)},
+    channel TEXT {check('channel', PROJECT_CHANNELS, nullable=True)},
+    pitched_on TEXT,                     -- the first pitch or proposal went out
+    next_action TEXT,
+    next_action_due TEXT,
+    last_contact_on TEXT,
+    first_response_on TEXT,
+    follow_ups_sent INTEGER NOT NULL DEFAULT 0,
+    last_follow_up_on TEXT,
+    closed_on TEXT,
+    outcome_notes TEXT,
+    notes TEXT,
+    {STAMPS}
+);"""
+
+
 INDEXES = """
 CREATE UNIQUE INDEX jobs_source_ref ON jobs(source, source_ref) WHERE source_ref IS NOT NULL;
 CREATE INDEX jobs_company ON jobs(company_id);
@@ -154,6 +200,16 @@ CREATE INDEX email_threads_job ON email_threads(job_id);
 CREATE INDEX email_drafts_job ON email_drafts(job_id);
 CREATE INDEX files_entity ON files(entity_type, entity_id);
 """
+
+# Kept apart from INDEXES, which the v3 migration replays before these tables and columns exist.
+INDEXES_V5 = (
+    "CREATE UNIQUE INDEX IF NOT EXISTS projects_source_ref ON projects(source, source_ref) WHERE source_ref IS NOT NULL",
+    "CREATE INDEX IF NOT EXISTS projects_company ON projects(company_id)",
+    "CREATE INDEX IF NOT EXISTS projects_status ON projects(status)",
+    "CREATE INDEX IF NOT EXISTS email_threads_project ON email_threads(project_id)",
+    "CREATE INDEX IF NOT EXISTS email_drafts_project ON email_drafts(project_id)",
+    "CREATE INDEX IF NOT EXISTS events_project ON events(project_id)",
+)
 
 SCHEMA = f"""
 CREATE TABLE companies (
@@ -176,11 +232,13 @@ CREATE TABLE contacts (
     company_id INTEGER REFERENCES companies(id) ON DELETE SET NULL,
     linkedin TEXT,
     phone TEXT,
+    role TEXT {check('role', CONTACT_ROLES, nullable=True)},   -- who they are to you
     notes TEXT,
     {STAMPS}
 );
 CREATE UNIQUE INDEX contacts_email ON contacts(email) WHERE email IS NOT NULL;
 {jobs_table()}
+{projects_table()}
 {interviews_table()}
 {threads_table()}
 
@@ -201,7 +259,7 @@ CREATE TABLE email_messages (
 {drafts_table()}
 {files_table()}
 
--- Every change, by whom. Doubles as each job's timeline (notes are events with
+-- Every change, by whom. Doubles as each job's and project's timeline (notes are events with
 -- action 'note') and as the feed the dashboard listens to for live updates.
 -- application_id only appears on events from schema v1-2, when applications had their own table.
 CREATE TABLE events (
@@ -214,10 +272,12 @@ CREATE TABLE events (
     application_id INTEGER,
     action TEXT NOT NULL,
     summary TEXT NOT NULL,
-    data TEXT
+    data TEXT,
+    project_id INTEGER
 );
 CREATE INDEX events_job ON events(job_id);
 {INDEXES}
+{';'.join(INDEXES_V5)};
 """
 
 # v2 -> v3: applications merge into jobs. Each job had at most one application.
@@ -296,6 +356,53 @@ COMMIT;
 """
 
 
+def _add_column(conn, table, column, definition):
+    """ALTER TABLE ADD COLUMN, skipped when the column is already there (a table the v3 migration
+    built from today's definition has it from the start)."""
+    if column not in {r[1] for r in conn.execute(f"PRAGMA table_info({table})")}:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+
+
+def _rebuild(conn, table, definition):
+    """Recreate `table` from its current definition, keeping every row and the columns both share.
+    For constraint changes, which SQLite can't ALTER."""
+    old = [r[1] for r in conn.execute(f"PRAGMA table_info({table})")]
+    conn.execute(definition(f"{table}_new"))
+    keep = ", ".join(c for c in (r[1] for r in conn.execute(f"PRAGMA table_info({table}_new)")) if c in old)
+    conn.execute(f"INSERT INTO {table}_new ({keep}) SELECT {keep} FROM {table}")
+    conn.execute(f"DROP TABLE {table}")
+    conn.execute(f"ALTER TABLE {table}_new RENAME TO {table}")
+
+
+def _migrate_4_to_5(conn):
+    """v5 adds client work: the projects table; a project_id on email threads, drafts and events;
+    'project' as a file owner; a role on contacts. Drafts and files are rebuilt because their
+    constraints change. Runs as one transaction, and only if no other process got there first."""
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        if conn.execute("PRAGMA user_version").fetchone()[0] != 4:
+            conn.execute("ROLLBACK")
+            return
+        conn.execute(projects_table())
+        _add_column(conn, "contacts", "role", f"TEXT {check('role', CONTACT_ROLES, nullable=True)}")
+        _add_column(conn, "email_threads", "project_id", "INTEGER REFERENCES projects(id) ON DELETE SET NULL")
+        _add_column(conn, "events", "project_id", "INTEGER")
+        _rebuild(conn, "email_drafts", drafts_table)
+        _rebuild(conn, "files", files_table)
+        conn.execute("CREATE INDEX IF NOT EXISTS email_drafts_job ON email_drafts(job_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS files_entity ON files(entity_type, entity_id)")
+        for sql in INDEXES_V5:
+            conn.execute(sql)
+        bad = conn.execute("PRAGMA foreign_key_check").fetchall()
+        if bad:
+            raise RuntimeError(f"Foreign key problems after the v5 migration: {[tuple(r) for r in bad][:5]}")
+        conn.execute("PRAGMA user_version = 5")
+        conn.execute("COMMIT")
+    except BaseException:
+        conn.execute("ROLLBACK")
+        raise
+
+
 def now():
     return datetime.now().replace(microsecond=0).isoformat()
 
@@ -354,6 +461,9 @@ def ensure_schema(conn):
             if "duplicate column" not in str(exc):
                 raise
         conn.execute("PRAGMA user_version = 4")
+        version = 4
+    if version == 4:
+        _migrate_4_to_5(conn)
 
 
 def backup_path(conn, label):

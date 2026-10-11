@@ -87,6 +87,23 @@ export function actorName(actor: string): string {
   return { me: 'You', claude: 'Claude', import: 'Import', system: 'System' }[actor] ?? actor
 }
 
+/** "$1,500", "PKR 50,000": an amount in its currency, or a plain number when there's none. */
+export function money(value: number, currency: string | null | undefined): string {
+  if (currency) {
+    try {
+      return new Intl.NumberFormat('en-US', { style: 'currency', currency, maximumFractionDigits: value % 1 ? 2 : 0 }).format(value)
+    } catch { /* not an ISO code: show it as written */ }
+  }
+  return `${currency ? `${currency} ` : ''}${value.toLocaleString('en-US', { maximumFractionDigits: 2 })}`
+}
+
+/** A project's price as a card shows it: "$1,500", "$30/hr", "$500/mo". */
+export function price(p: { pricing: string; value: number | null; currency: string | null }): string | null {
+  if (p.value == null) return null
+  const m = money(p.value, p.currency)
+  return p.pricing === 'hourly' ? `${m}/hr` : p.pricing === 'retainer' ? `${m}/mo` : m
+}
+
 export function plural(n: number, word: string, many?: string) {
   return `${n} ${n === 1 ? word : many ?? word + 's'}`
 }
